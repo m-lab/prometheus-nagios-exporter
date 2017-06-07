@@ -1,0 +1,9 @@
+autoflake
+autopep8
+coveralls
+docformatter
+mock
+pylint
+testfixtures
+unify
+flask

@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/m-lab/prometheus-nagios-exporter.svg?branch=master)](https://travis-ci.org/m-lab/prometheus-nagios-exporter)
+[![Coverage Status](https://coveralls.io/repos/github/m-lab/prometheus-nagios-exporter/badge.svg?branch=master)](https://coveralls.io/github/m-lab/prometheus-nagios-exporter?branch=master)
+
 # prometheus-nagios-exporter
 
 The prometheus nagios exporter reads status and performance data from nagios

@@ -1,0 +1,10 @@
+language: python
+python: '2.7'
+dist: trusty
+install:
+- pip install -r test-requirements.txt
+- pip install coveralls
+script:
+- coverage run --source='.' -m unittest discover --pattern='*_test.py'
+after_success:
+- coveralls

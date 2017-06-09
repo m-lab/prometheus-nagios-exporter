@@ -8,6 +8,7 @@ import contextlib
 import collections
 import json
 import os
+import re
 import sys
 import socket
 
@@ -24,6 +25,20 @@ COLUMNS = [
     'process_performance_data', 'check_command', 'acknowledged',
     'execution_time', 'is_flapping'
 ]
+
+# Maps known units to a scaling factor for converting Nagios performance data
+# into canonical units for prometheus.
+UNIT_TO_SCALE = {
+    'GB': 1024 * 1024 * 1024,
+    'MB': 1024 * 1024,
+    'KB': 1024,
+    'ms': 0.001,
+    'usec': 0.000001,
+    '%': 0.01,
+}
+
+# Extract performance data value and unit, e.g. 2400MB, 2.3%.
+UNIT_REGEX = re.compile('([0-9.]+)([^0-9.]+)?')
 
 # Service contains named fields corresponding to the column names returned by
 # the livestatus plugin.
@@ -61,8 +76,11 @@ def parse_args(args):
 
     # TODO: support --whitelist patterns to limit exported services.
     parser.add_argument(
-        '--whitelist', default=None, help=('Only export metrics for services '
-            'that include this whitelist pattern.'))
+        '--whitelist', type=str, default=None,
+        help=('Only export metrics for services that include this whitelist '
+              'pattern.'))
+    # TODO: support --perf_data.
+    # TODO: support --perf_data extra fields.
 
     return parser.parse_args(args)
 
@@ -148,6 +166,105 @@ class LiveStatus(object):
         return ''.join(results)
 
 
+def split_perf_data_values(metric):
+    """..."""
+    name, values = metric.split('=')
+    values = values.split(';')
+    return name, values
+
+
+def parse_perf_data(metric_prefix, metric_labels, raw_perf_data):
+    """Parses raw performance data from check plugins for prometheus metrics.
+
+    By default, only the first performance data value from every key is used.
+
+    TODO: support extracting other values using hints from command line flags.
+
+    If the key name contains characters [a-zA-Z0-9] then that is used literally
+    in the prometheus metric name. For keys with additional characters, the
+    prometheus metric uses a generic name "_perf_value" with a "key=" label
+    equal to the key name.
+
+    For example, a check_load performance data would include a load1 value:
+
+      load1=0.000;5.000;10.000;0;
+
+    Which parse_perf_data would translate to:
+
+      nagios_check_load_perf_data{key="load1", ...} 0.000
+
+    Whereas, a check_disk performance data would include a filesystem path as
+    the key name, e.g:
+
+      /=2400MB;48356;54400;0;60445
+
+    Which parse_perf_data would translate to:
+
+      nagios_check_disk_perf_data{key="/", ...} 2400000000
+
+    Args:
+      metric_prefix: str, the metric name prefix, used to create metric names
+        for performance data.
+      raw_perf_data: str, the performance data as collected by Nagios from the
+        check plugins.
+
+    Returns:
+      list of (suffix, labels, value) tuples.
+
+    Examples:
+      load1=0.000;5.000;10.000;0; load5=0.000;4.000;6.000;0;
+      users=0;20;50;0
+      /=2400MB;48356;54400;0;60445 /dev=0MB;798;898;0;998
+    """
+    metrics = []
+    perf_tokens = raw_perf_data.split()
+    for token in perf_tokens:
+        key, values = split_perf_data_values(token)
+        labels = {'key': key}
+        labels.update(metric_labels)
+        # NOTE: Units are typically only noted on the first value, so save it.
+        value, unit = parse_value_and_unit(values[0])
+        # TODO: optionally support remaining values.
+        value = convert_value_to_base_unit(value, unit)
+        metrics.append((metric_prefix + '_perf_data', labels, value))
+
+    return metrics
+
+
+def parse_value_and_unit(raw_value):
+    """Returns the value, unit tuple. Unit may be empty."""
+    m = UNIT_REGEX.match(raw_value)
+    if not m:
+        # default to raw value.
+        return raw_value, ''
+
+    value = m.group(1)
+    unit = m.group(2)
+
+    if not unit:
+        return value, ''
+    else:
+        return value, unit
+
+
+def convert_value_to_base_unit(value, unit):
+    """Converts value to canonical units."""
+    if not unit:
+        return value
+
+    if unit not in UNIT_TO_SCALE:
+        # TODO: log missing unit.
+        return value
+
+    try:
+        value = float(value)
+        value *= UNIT_TO_SCALE[unit]
+    except ValueError:
+        # Leave value as a string. e.g. 0.3.1
+        pass
+    return str(value)
+
+
 def canonical_command(cmd):
     """Handles nrpe commands to return the canonical command name.
 
@@ -216,9 +333,10 @@ def get_services(session):
         lines.append(
             format_metric('%s_acknowledged' % cmd, labels, s.acknowledged))
 
-        if s.process_performance_data:
-            # TODO: parse s.perf_data.
-            pass
+        if s.perf_data:
+            values = parse_perf_data(cmd, labels, s.perf_data)
+            for (perf_metric, perf_labels, value) in values:
+                lines.append(format_metric(perf_metric, perf_labels, value))
 
     return lines
 
@@ -251,6 +369,10 @@ def metrics(args):
         lines.append('nagios_exporter_success 1')
     except NagiosError:
         lines.append('nagios_exporter_success 0')
+
+    if args.whitelist:
+        print 'Filtering metrics with:', args.whitelist
+        lines = filter(lambda x: args.whitelist in x, lines)
 
     # The last line must include a new line or the prometheus parser fails.
     response = '\n'.join(lines) + '\n'

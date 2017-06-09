@@ -213,6 +213,16 @@ class NagiosExporterTest(unittest.TestCase):
 
         self.assertItemsEqual(values, expected_status + expected_services)
 
+    @mock.patch.object(socket, 'socket')
+    def test_connect(self, mock_socket):
+        mock_conn = mock.Mock()
+        mock_socket.return_value = mock_conn
 
-if __name__ == "__main__":
+        nagios_exporter.connect('/fake-path')
+
+        self.assertEqual(mock_socket.call_count, 1)
+        self.assertEqual(mock_conn.connect.call_count, 1)
+
+
+if __name__ == "__main__":  # pragma: no cover
     unittest.main()

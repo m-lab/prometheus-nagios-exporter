@@ -103,9 +103,6 @@ def parse_args(args):
         help=('When parsing additional fields than the first, specify: '
               '--data_names=<check_cmd>=<0th-name>;<1st-name>;;;'))
 
-    # TODO: support --perf_data.
-    # TODO: support --perf_data extra fields.
-
     return parser.parse_args(args)
 
 
@@ -221,8 +218,6 @@ def get_perf_data(check_command, metric_labels, raw_perf_data_values,
     """Parses raw performance data from check plugins for prometheus metrics.
 
     By default, only the first performance data value from every key is used.
-
-    TODO: support extracting other values using hints from command line flags.
 
     If the key name contains characters [a-zA-Z0-9] then that is used literally
     in the prometheus metric name. For keys with additional characters, the
@@ -409,7 +404,6 @@ def collect_metrics(args, lines):
         lines.extend(get_status(session))
 
     with contextlib.closing(connect(args.path)) as sock:
-        # TODO: support filtering specific services or hosts.
         session = LiveStatus(sock)
         services = get_services(
             session, args.use_perf_data, args.data_names)

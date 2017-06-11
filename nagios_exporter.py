@@ -7,10 +7,11 @@ import argparse
 import contextlib
 import collections
 import json
+import logging
 import os
 import re
-import sys
 import socket
+import sys
 
 import flask
 
@@ -64,7 +65,8 @@ class NagiosConnectError(NagiosError):
 def parse_args(args):
     """Parses command line arguments."""
 
-    parser = argparse.ArgumentParser(description='Prometheus Nagios Exporter.')
+    parser = argparse.ArgumentParser(
+        description='Prometheus Nagios Exporter.')
     parser.add_argument(
         '--path', help='Absolute path to livestatus Nagios UNIX socket.')
 
@@ -74,11 +76,33 @@ def parse_args(args):
         '--port', type=int, default=5000,
         help='Export server should listen on port.')
 
-    # TODO: support --whitelist patterns to limit exported services.
+    # Report metrics in the "--whitelist" or "--all_metrics".
     parser.add_argument(
-        '--whitelist', type=str, default=None,
-        help=('Only export metrics for services that include this whitelist '
-              'pattern.'))
+        '--whitelist', default=None, action='append',
+        help=('Default: only export metrics for services that include this '
+              'whitelist pattern. Can be specified multiple times.'))
+    parser.add_argument(
+        '--all_metrics', default=False, action='store_true',
+        help=('Instead of a select whitelist of metrics, always report all '
+              'metrics.'))
+
+    # The default is to start the exporter as an HTTP service. Alternately, dump
+    # metrics once to stdout.
+    parser.add_argument(
+        '--dump_metrics', dest='dump_metrics', action='store_true',
+        help=('Writes all metrics to stdout and then exits. Useful for choosing '
+              'metrics for whitelist selection.'))
+
+    # Generate metrics from the nagios performance data where available.
+    parser.add_argument(
+        '--perf_data', dest='use_perf_data', default=False, action='store_true',
+        help='Generate metrics for performance data.')
+    parser.add_argument(
+        '--data_names', default=[], dest='data_names',
+        action='append',
+        help=('When parsing additional fields than the first, specify: '
+              '--data_names=<check_cmd>=<0th-name>;<1st-name>;;;'))
+
     # TODO: support --perf_data.
     # TODO: support --perf_data extra fields.
 
@@ -166,14 +190,34 @@ class LiveStatus(object):
         return ''.join(results)
 
 
-def split_perf_data_values(metric):
-    """..."""
-    name, values = metric.split('=')
-    values = values.split(';')
-    return name, values
+def parse_perf_data_fields(raw_perf_data):
+    """Parses raw performance data or data names flags.
+
+    Args:
+        raw_perf_data: iterable of str, each element is a key=values
+    Returns:
+        dict of str to list of fields.
+
+    For example:
+        --data_names="check_all_disks=used;free"
+        --data_names="check_load=load"
+
+    Becomes raw_perf_data:
+        ["check_all_disks=used;free", "check_load=load"]
+
+    Becomes value_map:
+        {"check_all_disks": ['used', 'free'], "check_load": ['load']}
+    """
+    fields = {}
+    for raw_value in raw_perf_data:
+        name, values = raw_value.split('=')
+        values = values.split(';')
+        fields[name] = values
+    return fields
 
 
-def parse_perf_data(metric_prefix, metric_labels, raw_perf_data):
+def get_perf_data(check_command, metric_labels, raw_perf_data_values,
+                  raw_perf_data_names):
     """Parses raw performance data from check plugins for prometheus metrics.
 
     By default, only the first performance data value from every key is used.
@@ -203,30 +247,47 @@ def parse_perf_data(metric_prefix, metric_labels, raw_perf_data):
       nagios_check_disk_perf_data{key="/", ...} 2400000000
 
     Args:
-      metric_prefix: str, the metric name prefix, used to create metric names
-        for performance data.
-      raw_perf_data: str, the performance data as collected by Nagios from the
-        check plugins.
+      check_command: str, the metric name prefix, used to create metric names
+          for performance data.
+      metric_labels: dict of str, key value labels to apply resulting metrics.
+      raw_perf_data_values: iterable of str, the performance data as collected by
+          Nagios from the check plugins.
+      raw_perf_data_names: iterable of str, each element should match the
+          pattern: <check_command>=<0-name>[;<1-name>]*. This names perf_data
+          values for the given check_command. The default field name is simply
+          'value'.
 
     Returns:
       list of (suffix, labels, value) tuples.
 
     Examples:
-      load1=0.000;5.000;10.000;0; load5=0.000;4.000;6.000;0;
-      users=0;20;50;0
-      /=2400MB;48356;54400;0;60445 /dev=0MB;798;898;0;998
+      load1=0.000;5.000;10.000;0; /=2400MB;48356;54400;0;60445
     """
     metrics = []
-    perf_tokens = raw_perf_data.split()
-    for token in perf_tokens:
-        key, values = split_perf_data_values(token)
+
+    values_map = parse_perf_data_fields(raw_perf_data_values)
+    names_map = parse_perf_data_fields(raw_perf_data_names)
+
+    for key, raw_values in values_map.iteritems():
         labels = {'key': key}
         labels.update(metric_labels)
+
         # NOTE: Units are typically only noted on the first value, so save it.
-        value, unit = parse_value_and_unit(values[0])
-        # TODO: optionally support remaining values.
-        value = convert_value_to_base_unit(value, unit)
-        metrics.append((metric_prefix + '_perf_data', labels, value))
+        _, unit = parse_value_and_unit(raw_values[0])
+
+        # Use given field names, or default to use the first value only.
+        field_names = names_map.get(check_command, ('value',))
+
+        # Convert every perf_data value for which we have a field name.
+        for i, field_name in enumerate(field_names):
+            if not field_name:
+                continue
+
+            value, _ = parse_value_and_unit(raw_values[i])
+            base_value = convert_value_to_base_unit(value, unit)
+            suffix = '_' + field_name
+            metrics.append(
+                (check_command + '_perf_data' + suffix, labels, base_value))
 
     return metrics
 
@@ -235,16 +296,9 @@ def parse_value_and_unit(raw_value):
     """Returns the value, unit tuple. Unit may be empty."""
     m = UNIT_REGEX.match(raw_value)
     if not m:
-        # default to raw value.
         return raw_value, ''
-
-    value = m.group(1)
-    unit = m.group(2)
-
-    if not unit:
-        return value, ''
-    else:
-        return value, unit
+    value, unit = m.groups('')
+    return value, unit
 
 
 def convert_value_to_base_unit(value, unit):
@@ -261,7 +315,7 @@ def convert_value_to_base_unit(value, unit):
         value *= UNIT_TO_SCALE[unit]
     except ValueError:
         # Leave value as a string. e.g. 0.3.1
-        pass
+        return value + unit
     return str(value)
 
 
@@ -310,7 +364,7 @@ def get_status(session):
     return lines
 
 
-def get_services(session):
+def get_services(session, use_perf_data, raw_perf_data_names):
     """Queries the livestatus plugin and exports service metrics."""
     query = 'GET services\nColumns: ' + ' '.join(COLUMNS)
     services = [Service(*s) for s in session.query(query)]
@@ -333,8 +387,9 @@ def get_services(session):
         lines.append(
             format_metric('%s_acknowledged' % cmd, labels, s.acknowledged))
 
-        if s.perf_data:
-            values = parse_perf_data(cmd, labels, s.perf_data)
+        if use_perf_data and s.perf_data:
+            values = get_perf_data(
+                cmd, labels, s.perf_data.split(), raw_perf_data_names)
             for (perf_metric, perf_labels, value) in values:
                 lines.append(format_metric(perf_metric, perf_labels, value))
 
@@ -356,7 +411,14 @@ def collect_metrics(args, lines):
     with contextlib.closing(connect(args.path)) as sock:
         # TODO: support filtering specific services or hosts.
         session = LiveStatus(sock)
-        lines.extend(get_services(session))
+        services = get_services(
+            session, args.use_perf_data, args.data_names)
+
+    if args.whitelist:
+        for whitelist in args.whitelist:
+            lines.extend(filter(lambda x: whitelist in x, services))
+    elif args.all_metrics or args.dump_metrics:
+        lines.extend(services)
 
     return
 
@@ -370,10 +432,6 @@ def metrics(args):
     except NagiosError:
         lines.append('nagios_exporter_success 0')
 
-    if args.whitelist:
-        print 'Filtering metrics with:', args.whitelist
-        lines = filter(lambda x: args.whitelist in x, lines)
-
     # The last line must include a new line or the prometheus parser fails.
     response = '\n'.join(lines) + '\n'
     return flask.Response(response, content_type='text/plain; charset=utf-8')
@@ -381,6 +439,11 @@ def metrics(args):
 
 def main():  # pragma: no cover
     args = parse_args(sys.argv[1:])
+    if args.dump_metrics:
+        resp = metrics(args)
+        sys.stdout.write(resp.get_data())
+        sys.exit(0)
+
     app = flask.Flask(__name__)
     app.add_url_rule('/metrics', 'metrics', lambda: metrics(args))
     app.run(host='0.0.0.0', port=args.port, debug=True)

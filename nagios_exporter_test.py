@@ -134,7 +134,7 @@ class NagiosExporterTest(unittest.TestCase):
         fake_sock = FakeSocketIO(fixed16_header + json_response)
 
         session = nagios_exporter.LiveStatus(fake_sock)
-        actual = nagios_exporter.get_services(session)
+        actual = nagios_exporter.get_services(session, False, ())
 
         self.assertEqual(actual, expected)
 
@@ -183,8 +183,10 @@ class NagiosExporterTest(unittest.TestCase):
 
     @mock.patch.object(nagios_exporter, 'connect')
     @mock.patch.object(os.path, 'exists')
-    def test_collect_metrics(self, mock_exists, mock_connect):
-        args = nagios_exporter.parse_args(['--path', '/not-a-real/path'])
+    def test_collect_metrics_when_all_metrics_is_true(
+        self, mock_exists, mock_connect):
+        args = nagios_exporter.parse_args(
+            ['--path', '/not-a-real/path', '--all_metrics', '--perf_data'])
         expected_status = [
             'nagios_livestatus_available 1',
             'nagios_thing_a 1',
@@ -199,7 +201,38 @@ class NagiosExporterTest(unittest.TestCase):
             'nagios_check_load_latency{hostname="localhost", service="Current Load"} 0.078',
             'nagios_check_load_state{hostname="localhost", service="Current Load"} 0',
             'nagios_check_load_flapping{hostname="localhost", service="Current Load"} 0',
-            'nagios_check_load_acknowledged{hostname="localhost", service="Current Load"} 0'
+            'nagios_check_load_acknowledged{hostname="localhost", service="Current Load"} 0',
+            'nagios_check_load_perf_data_value{hostname="localhost", service="Current Load", key="load1"} 0.560'
+        ]
+        # Setup fake get_services response.
+        json_response = json.dumps(self.services)
+        fixed16_header = fixed16('200', len(json_response))
+        fake_service_sock = FakeSocketIO(fixed16_header + json_response)
+        mock_exists.return_value = True
+        mock_connect.side_effect = [fake_status_sock, fake_service_sock]
+
+        values = []
+        nagios_exporter.collect_metrics(args, values)
+
+        self.assertItemsEqual(values, expected_status + expected_services)
+
+    @mock.patch.object(nagios_exporter, 'connect')
+    @mock.patch.object(os.path, 'exists')
+    def test_collect_metrics_when_whitelist(
+        self, mock_exists, mock_connect):
+        args = nagios_exporter.parse_args(
+            ['--path=/not-a-real/path', '--whitelist=nagios_check_load_state'])
+        expected_status = [
+            'nagios_livestatus_available 1',
+            'nagios_thing_a 1',
+            'nagios_thing_b 0'
+        ]
+        # Setup fake get_status response.
+        json_response = json.dumps([['thing_a', 'thing_b'], [1, 0]])
+        fixed16_header = fixed16('200', len(json_response))
+        fake_status_sock = FakeSocketIO(fixed16_header + json_response)
+        expected_services = [
+            'nagios_check_load_state{hostname="localhost", service="Current Load"} 0',
         ]
         # Setup fake get_services response.
         json_response = json.dumps(self.services)
@@ -222,6 +255,50 @@ class NagiosExporterTest(unittest.TestCase):
 
         self.assertEqual(mock_socket.call_count, 1)
         self.assertEqual(mock_conn.connect.call_count, 1)
+
+    def test_parse_value_and_unit(self):
+        self.assertEqual(
+            nagios_exporter.parse_value_and_unit('2400MB'), ('2400', 'MB'))
+        self.assertEqual(
+            nagios_exporter.parse_value_and_unit('30%'), ('30', '%'))
+        self.assertEqual(
+            nagios_exporter.parse_value_and_unit('0.323ms'), ('0.323', 'ms'))
+        self.assertEqual(
+            nagios_exporter.parse_value_and_unit('3.4'), ('3.4', ''))
+        self.assertEqual(
+            nagios_exporter.parse_value_and_unit('v0.3.4'), ('v0.3.4', ''))
+
+    def test_convert_value_to_base_unit(self):
+        # Known unit.
+        self.assertEqual(
+            nagios_exporter.convert_value_to_base_unit('2400', 'KB'),
+            '2457600.0')
+        # No unit.
+        self.assertEqual(
+            nagios_exporter.convert_value_to_base_unit('2400', ''), '2400')
+        # Ignored / unknown unit.
+        self.assertEqual(
+            nagios_exporter.convert_value_to_base_unit('2400', 'hz'), '2400')
+        # Not a numeric value.
+        self.assertEqual(
+            nagios_exporter.convert_value_to_base_unit('v3.1', ''), 'v3.1')
+        # Not a numeric value with a known unit (e.g. coincidence or bad value)
+        self.assertEqual(
+            nagios_exporter.convert_value_to_base_unit('v3.1', 'KB'), 'v3.1KB')
+
+    def test_get_perf_data(self):
+        expected = [
+            ('check_disk_perf_data_used', {'key': '/'}, '2516582400.0'),
+            ('check_disk_perf_data_free', {'key': '/'}, '50704941056.0'),
+            ('check_disk_perf_data_total', {'key': '/'}, '63381176320.0')
+        ]
+
+        actual = nagios_exporter.get_perf_data(
+            'check_disk', {},
+            ['/=2400MB;48356;54400;0;60445'],
+            ['check_disk=used;free;;;total'])
+
+        self.assertItemsEqual(actual, expected)
 
 
 if __name__ == "__main__":  # pragma: no cover

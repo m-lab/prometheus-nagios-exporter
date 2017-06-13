@@ -30,8 +30,8 @@ To really export all metrics.
     ./nagios_exporter.py --path <livestatus> --perf_data --all_metrics
 """
 import argparse
-import contextlib
 import collections
+import contextlib
 import json
 import logging
 import os

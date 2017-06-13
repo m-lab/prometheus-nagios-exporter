@@ -106,7 +106,8 @@ def parse_args(args):
     parser.add_argument(
         '--whitelist', default=None, action='append', metavar='<pattern>',
         help=('Default: only export metrics for services that include this '
-              'whitelist pattern. Can be specified multiple times.'))
+              'whitelist pattern. Can be specified multiple times. Metrics '
+              'returned are the UNION of all matched patterns.'))
     parser.add_argument(
         '--all_metrics', default=False, action='store_true',
         help=('Instead of a select whitelist of metrics, always report all '
@@ -332,7 +333,7 @@ def convert_value_to_base_unit(value, unit):
         return value
 
     if unit not in UNIT_TO_SCALE:
-        # TODO: log missing unit.
+        logging.warning('Unknown unit: %s', unit)
         return value
 
     try:

@@ -442,12 +442,8 @@ def collect_metrics(args, lines):
 
         if args.whitelist:
             for metric in services:
-                for whitelist in args.whitelist:
-                    if whitelist in metric:
-                        lines.append(metric)
-                        # Stop checking whitelist patterns and continue to the
-                        # next metric.
-                        break
+                if any(whitelist in metric for whitelist in args.whitelist):
+                    lines.append(metric)
         else:
             lines.extend(services)
 

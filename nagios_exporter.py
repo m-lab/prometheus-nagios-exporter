@@ -107,7 +107,7 @@ def parse_args(args):
         '--whitelist', default=None, action='append', metavar='<pattern>',
         help=('Default: only export metrics for services that include this '
               'whitelist pattern. Can be specified multiple times. Metrics '
-              'returned are the UNION of all matched patterns.'))
+              'returned are the UNION of all matching patterns.'))
     parser.add_argument(
         '--all_metrics', default=False, action='store_true',
         help=('Instead of a select whitelist of metrics, always report all '
@@ -441,8 +441,13 @@ def collect_metrics(args, lines):
                 session, args.use_perf_data, args.data_names)
 
         if args.whitelist:
-            for whitelist in args.whitelist:
-                lines.extend(filter(lambda x: whitelist in x, services))
+            for metric in services:
+                for whitelist in args.whitelist:
+                    if whitelist in metric:
+                        lines.append(metric)
+                        # Stop checking whitelist patterns and continue to the
+                        # next metric.
+                        break
         else:
             lines.extend(services)
 

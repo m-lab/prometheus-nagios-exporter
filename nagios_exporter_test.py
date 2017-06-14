@@ -165,6 +165,20 @@ class NagiosExporterTest(unittest.TestCase):
 
         self.assertIn('nagios_livestatus_available 0', lines)
 
+    def test_format_metric_with_various_value_types(self):
+      # Integer.
+      self.assertEqual(
+          'nagios_check_cmd{key="/"} 1',
+          nagios_exporter.format_metric('check_cmd', {'key': '/'}, '1'))
+      # Float.
+      self.assertEqual(
+          'nagios_check_cmd{key="/"} 0.1',
+          nagios_exporter.format_metric('check_cmd', {'key': '/'}, '0.1'))
+      # String.
+      self.assertEqual(
+          'nagios_check_cmd{key="/"} "v0.1"',
+          nagios_exporter.format_metric('check_cmd', {'key': '/'}, 'v0.1'))
+
     @mock.patch.object(nagios_exporter, 'collect_metrics')
     def test_metrics_when_exception_is_raised(self, mock_metrics):
         mock_metrics.side_effect = nagios_exporter.NagiosResponseError('error')

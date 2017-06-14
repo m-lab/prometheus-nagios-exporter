@@ -342,7 +342,7 @@ def convert_value_to_base_unit(value, unit):
         value = float(value)
         value *= UNIT_TO_SCALE[unit]
     except ValueError:
-        # Leave value as a string. e.g. 0.3.1
+        # Leave value as-is to be handled by format_metric().
         return value + unit
     return str(value)
 
@@ -375,6 +375,10 @@ def format_labels(labels):
 
 def format_metric(name, labels, value):
     """Formats the prometheus metric."""
+    try:
+        float(value)
+    except ValueError:
+        value = '"%s"' % value
     return 'nagios_%s%s %s' % (
         name.replace('-', '_'), format_labels(labels), value)
 

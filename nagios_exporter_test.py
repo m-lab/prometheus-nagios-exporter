@@ -176,7 +176,7 @@ class NagiosExporterTest(unittest.TestCase):
           nagios_exporter.format_metric('check_cmd', {'key': '/'}, '0.1'))
       # String.
       self.assertEqual(
-          'nagios_check_cmd{key="/"} "v0.1"',
+          'nagios_check_cmd{value="v0.1", key="/"} 1',
           nagios_exporter.format_metric('check_cmd', {'key': '/'}, 'v0.1'))
 
     @mock.patch.object(nagios_exporter, 'collect_metrics')

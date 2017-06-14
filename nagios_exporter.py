@@ -378,7 +378,11 @@ def format_metric(name, labels, value):
     try:
         float(value)
     except ValueError:
-        value = '"%s"' % value
+        # Convert the value (which is not a number) to a label. And use a
+        # constant value of 1 instead.
+        labels = labels.copy()
+        labels['value'] = value
+        value = 1
     return 'nagios_%s%s %s' % (
         name.replace('-', '_'), format_labels(labels), value)
 
@@ -391,7 +395,7 @@ def get_status(session):
 
     lines = []
     for key, value in values.iteritems():
-        lines.append(format_metric(key, '', value))
+        lines.append(format_metric(key, {}, value))
 
     return lines
 

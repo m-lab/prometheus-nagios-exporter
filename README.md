@@ -3,30 +3,34 @@
 
 # prometheus-nagios-exporter
 
-The prometheus nagios exporter reads status and performance data from nagios
-plugins via the [MK Livestatus][livestatus] nagios plugin and publishes this
-in a form that can be scrapped by prometheus.
+The Prometheus Nagios exporter reads status and performance data from nagios
+plugins via the [MK Livestatus][livestatus] Nagios plugin and publishes this
+in a form that can be scrapped by Prometheus.
 
 [livestatus]: https://mathias-kettner.de/checkmk_livestatus.html
 
 # Setup
 
 Setup is as simple as installing the livestatus module and then running the
-prometheus-nagios-exporter.py service.
+`nagios_exporter.py` service.
 
     echo 'broker_module=/usr/lib/check_mk/livestatus.o /var/lib/nagios3/rw/livestatus' >> /etc/nagios3/nagios.cfg
     echo 'event_broker_options=-1' >> /etc/nagios3/nagios.cfg
 
-Restart nagios, and start the exporter:
+Restart Nagios, and start the exporter:
 
-    ./prometheus-nagios-exporter.py --path /var/lib/nagios3/rw/livestatus
+    ./nagios_exporter.py --path /var/lib/nagios3/rw/livestatus
+
+It should then be possible to visit:
+
+    http://localhost:5000/metrics
 
 # Metrics
 
 Every metric is prefixed with `nagios_`, following the [metric naming best
-practices][naming]. The prefix is followed by the name of the nagios check
+practices][naming]. The prefix is followed by the name of the Nagios check
 command, such as `nagios_check_load_`. The metric name suffix comes from various
-nagios status names. For example, a load service check for `localhost` would
+Nagios status names. For example, a load service check for `localhost` would
 include the following metrics:
 
 ```
@@ -43,14 +47,12 @@ Every metric is also labeled with the hostname and service description.
 
 # Performance data
 
-Performance data is plugin-specific. Though there is a common format that
-most plugins follow.
-
-Performance data follows plugin output starting with `|`. Typically, the
-format is a set of `key=value1[;value2]+` strings. For example:
+Performance data is plugin-specific. Though there is a common format that most
+plugins follow. Performance data follows plugin output starting with `|`.
+Typically, the format is a set of `key=value1[;value2]+` strings. For example:
 
 ```
-$ check_disk <args>
+$ check_disk <some args>
 DISK OK - free space: / 2400 MB (69% inode=83%);| /=2400MB;48356;54400;0;60445
 ```
 
@@ -70,12 +72,20 @@ plugins using the `--data names` flag. For example:
 --data_names="check_disks=used;free;;;total"
 ```
 
-So, instead of only parsing the first value and using the default name,
-now the metric output for the original example will include three values
-each named and corresponding to the respective value in the raw perf data:
+So, instead of only parsing the first value and using the default name, now the
+metric output for the original example will include three values each named and
+corresponding to the respective value in the raw perf data:
 
 ```
 nagios_check_all_disks_perf_data_used{key="/", ...}  2516582400.0
 nagios_check_all_disks_perf_data_free{key="/", ...} 50704941056.0
 nagios_check_all_disks_perf_data_totalkey="/", ...} 63381176320.0
+```
+
+# Example
+
+```
+    ./nagios_exporter.py --path /var/lib/nagios3/rw/livestatus \
+        --perf_data --perf_names="check_disks=used;free;;;total" \
+        --whitelist nagios_check_all_disks_perf_data
 ```

@@ -43,7 +43,39 @@ Every metric is also labeled with the hostname and service description.
 
 # Performance data
 
-For better or worse, performance data is plugin-specific. Though there is a
-general format that most plugins follow.
+Performance data is plugin-specific. Though there is a common format that
+most plugins follow.
 
-TODO(soltesz): add details.
+Performance data follows plugin output starting with `|`. Typically, the
+format is a set of `key=value1[;value2]+` strings. For example:
+
+```
+$ check_disk <args>
+DISK OK - free space: / 2400 MB (69% inode=83%);| /=2400MB;48356;54400;0;60445
+```
+
+By default, nagios-exporter only parses the first value of performance data
+for every key. The default field name is 'value'. And, the key is always added
+as a metric label. So, for example, the default metric output for the above
+performance data would be:
+
+```
+nagios_check_disk_perf_data_value{key="/", ...} 2516582400.0
+```
+
+More specific names can be assigned to each value position of particular check
+plugins using the `--data names` flag. For example:
+
+```
+--data_names="check_disks=used;free;;;total"
+```
+
+So, instead of only parsing the first value and using the default name,
+now the metric output for the original example will include three values
+each named and corresponding to the respective value in the raw perf data:
+
+```
+nagios_check_all_disks_perf_data_used{key="/", ...}  2516582400.0
+nagios_check_all_disks_perf_data_free{key="/", ...} 50704941056.0
+nagios_check_all_disks_perf_data_totalkey="/", ...} 63381176320.0
+```

@@ -66,7 +66,7 @@ nagios_check_disk_perf_data_value{key="/", ...} 2516582400.0
 ```
 
 More specific names can be assigned to each value position of particular check
-plugins using the `--data names` flag. For example:
+plugins using the `--data_names` flag. For example:
 
 ```
 --data_names="check_disks=used;free;;;total"

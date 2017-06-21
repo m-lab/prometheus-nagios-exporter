@@ -98,10 +98,10 @@ def parse_args(args):
         '--path', default='/var/lib/nagios3/rw/livestatus',
         help='Absolute path to livestatus Nagios UNIX socket.')
 
-    # TODO: choose appropriate port based on:
+    # Port reserved on:
     # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
     parser.add_argument(
-        '--port', type=int, default=5000, metavar='5000',
+        '--port', type=int, default=9267, metavar='9267',
         help='Export server should listen on port.')
 
     # Report metrics in the "--whitelist" or "--all_metrics".

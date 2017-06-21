@@ -1,0 +1,10 @@
+[Unit]
+Description=Prometheus Nagios Exporter Service
+
+[Service]
+ExecStart=/opt/mlab/prometheus-nagios-exporter/nagios_exporter.py --path /var/lib/nagios3/rw/live --perf_data --whitelist nagios_check_vdlimit_iupui_ndt_perf_data
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target
+Alias=prometheus-nagios-exporter.service

@@ -43,7 +43,31 @@ nagios_check_load_acknowledged{hostname="localhost", service="Load"} 0
 
 Every metric is also labeled with the hostname and service description.
 
+## Alternative Metrics
+
+To facilitate ease of maintenance in Prometheus rulesets, an alternative
+mechanism is provided if the flat `--command_labels` is set. The metrics
+will now contain the command as a label, like so:
+
+```
+nagios_command_exec_time{hostname="localhost", command="check_load", service="Load"} 0.011084
+nagios_command_latency{hostname="localhost", command="check_load", service="Load"} 0.078
+nagios_command_state{hostname="localhost", command="check_load", service="Load"} 0
+nagios_command_flapping{hostname="localhost", command="check_load", service="Load"} 0
+nagios_command_acknowledged{hostname="localhost", command="check_load", service="Load"} 0
+```
+
+The reason why this is useful is because of aggregation on the prometheus side.
+With the command as a label, the only rulesets we'd need asre ones for `exec_time`,
+`latency`, `state`, `flapping`, `acknowledged` and possibly `perf_data_value`.
+When new commands are added, no prometheus changes are necessary.
+
+If we keep the command in the metric name, each new command requires rulesets on
+Prometheus (or its graphing consoles, or Grafana). See [Issue #13][command_labels]
+for discussion.
+
 [naming]: https://prometheus.io/docs/practices/naming/
+[command_labels]: https://github.com/m-lab/prometheus-nagios-exporter/issues/13
 
 # Performance data
 

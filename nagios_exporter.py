@@ -132,6 +132,13 @@ def parse_args(args):
         help=('When parsing performance data, provide specific names to field '
               'positions, e.g. --data_names=check_disk=used;free;;;total'))
 
+    # Report metrics with the command as a label instead of the command in the
+    # metricname.
+    parser.add_argument(
+        '--command_labels', default=False, action='store_true',
+        help=('Instead of putting the commands in the metric names, make them '
+              'a label instead.'))
+
     return parser.parse_args(args)
 
 
@@ -400,17 +407,22 @@ def get_status(session):
     return lines
 
 
-def get_services(session, use_perf_data, raw_perf_data_names):
+def get_services(session, use_perf_data, raw_perf_data_names, use_command_labels):
     """Queries the livestatus plugin and exports service metrics."""
     query = 'GET services\nColumns: ' + ' '.join(COLUMNS)
     services = [Service(*s) for s in session.query(query)]
 
     lines = []
     for s in services:
-        # Standard labels.
-        labels = {'hostname': s.host_name, 'service': s.service_description}
+        if use_command_labels:
+            # Standard labels, adding command as a label too.
+            labels = {'hostname': s.host_name, 'service': s.service_description, 'command': s.check_command}
+            cmd = "command"
+        else:
+            # Standard labels, with the command in the metric name.
+            labels = {'hostname': s.host_name, 'service': s.service_description}
+            cmd = canonical_command(s.check_command)
 
-        cmd = canonical_command(s.check_command)
         # TODO: use a single histogram for all execution and latency times.
         lines.append(
             format_metric('%s_exec_time' % cmd, labels, s.execution_time))
@@ -448,7 +460,7 @@ def collect_metrics(args, lines):
         with contextlib.closing(connect(args.path)) as sock:
             session = LiveStatus(sock)
             services = get_services(
-                session, args.use_perf_data, args.data_names)
+                session, args.use_perf_data, args.data_names, args.command_labels)
 
         if args.whitelist:
             for metric in services:

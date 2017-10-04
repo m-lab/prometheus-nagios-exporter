@@ -2,7 +2,7 @@
 Description=Prometheus Nagios Exporter Service
 
 [Service]
-ExecStart=/opt/mlab/prometheus-nagios-exporter/nagios_exporter.py --path /var/lib/nagios3/rw/live --perf_data --data_names="check_disk_boot=used;;;;total" --whitelist nagios_check_vdlimit_iupui_ndt_perf_data --whitelist nagios_check_disk_boot_perf_data_total --whitelist nagios_check_disk_boot_perf_data_used
+ExecStart=/opt/mlab/prometheus-nagios-exporter/nagios_exporter.py --path /var/lib/nagios3/rw/live --perf_data "--data_names=check_disk_boot=used;;;;total" --whitelist nagios_check_vdlimit_iupui_ndt_perf_data --whitelist nagios_check_disk_boot_perf_data_total --whitelist nagios_check_disk_boot_perf_data_used
 StandardOutput=null
 
 [Install]

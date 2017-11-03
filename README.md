@@ -23,7 +23,7 @@ Restart Nagios, and start the exporter:
 
 It should then be possible to visit:
 
-    http://localhost:5000/metrics
+    http://localhost:9267/metrics
 
 # Metrics
 

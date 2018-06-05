@@ -243,8 +243,11 @@ def parse_perf_data_fields(raw_perf_data):
     """
     fields = {}
     for raw_value in raw_perf_data:
-        name, values = raw_value.split('=')
-        values = values.split(';')
+        values = raw_value.split('=')
+        if len(values) <= 1:
+            continue
+        name = values[0]
+        values = values[1].split(';')
         fields[name] = values
     return fields
 

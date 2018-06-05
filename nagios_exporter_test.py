@@ -314,6 +314,13 @@ class NagiosExporterTest(unittest.TestCase):
 
         self.assertItemsEqual(actual, expected)
 
+    def test_parse_perf_data_fields_with_good_values(self):
+        self.assertItemsEqual(
+                {'/': ['2400MB', '48356', '54400', '0', '60445']},
+                nagios_exporter.parse_perf_data_fields(
+                    ['/=2400MB;48356;54400;0;60445']))
+    def test_parse_perf_data_fields_with_bad_values(self):
+        self.assertItemsEqual({}, nagios_exporter.parse_perf_data_fields(['-6]']))
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

@@ -486,7 +486,7 @@ def main():  # pragma: no cover
 
     app = flask.Flask(__name__)
     app.add_url_rule('/metrics', 'metrics', lambda: metrics(args))
-    app.run(host='0.0.0.0', port=args.port, debug=True)
+    app.run(host='0.0.0.0', port=args.port, debug=False)
 
 
 if __name__ == '__main__':  # pragma: no cover

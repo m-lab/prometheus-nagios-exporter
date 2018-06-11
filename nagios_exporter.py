@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """nagios_exporter.py reports Nagios service status for Prometheus collection.
 
 The default mode for nagios_exporter.py is to start an HTTP server that

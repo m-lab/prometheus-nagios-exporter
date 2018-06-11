@@ -195,6 +195,11 @@ class LiveStatus(object):
 
     def _send(self, msg):
         """Sends the given message to the socket."""
+
+        # socket.sendall() takes str in Python 2 and bytes in Python 3
+        if sys.version_info[0] >= 3:
+            msg = msg.encode()
+
         try:
             self._sock.sendall(msg)
         except socket.error as err:
@@ -212,6 +217,11 @@ class LiveStatus(object):
                 msg = 'Failed to read data from nagios server.'
                 raise NagiosResponseError(msg)
             count -= len(data)
+
+            # socket.recv() returns str in Python 2 and bytes in Python 3
+            if sys.version_info[0] >= 3:
+                data = data.decode()
+
             results.append(data)
         return ''.join(results)
 
@@ -299,7 +309,7 @@ def get_perf_data(check_command, metric_labels, raw_perf_data_values,
     values_map = parse_perf_data_fields(raw_perf_data_values)
     names_map = parse_perf_data_fields(raw_perf_data_names)
 
-    for key, raw_values in values_map.iteritems():
+    for key, raw_values in values_map.items():
         labels = {'key': key}
         labels.update(metric_labels)
 
@@ -370,7 +380,7 @@ def format_labels(labels):
         return ''
 
     fields = []
-    for key, value in labels.iteritems():
+    for key, value in labels.items():
         fields.append('%s="%s"' % (key, value))
 
     return '{' + ', '.join(fields) + '}'
@@ -397,7 +407,7 @@ def get_status(session):
     values = dict(zip(status[0], status[1]))
 
     lines = []
-    for key, value in values.iteritems():
+    for key, value in values.items():
         lines.append(format_metric(key, {}, value))
 
     return lines

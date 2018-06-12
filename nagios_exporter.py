@@ -380,7 +380,7 @@ def format_labels(labels):
         return ''
 
     fields = []
-    for key, value in labels.items():
+    for key, value in sorted(labels.items()):
         fields.append('%s="%s"' % (key, value))
 
     return '{' + ', '.join(fields) + '}'

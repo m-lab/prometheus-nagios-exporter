@@ -229,7 +229,7 @@ class NagiosExporterTest(unittest.TestCase):
             'nagios_check_load_state{hostname="localhost", service="Current Load"} 0',
             'nagios_check_load_flapping{hostname="localhost", service="Current Load"} 0',
             'nagios_check_load_acknowledged{hostname="localhost", service="Current Load"} 0',
-            'nagios_check_load_perf_data_value{hostname="localhost", service="Current Load", key="load1"} 0.560'
+            'nagios_check_load_perf_data_value{hostname="localhost", key="load1", service="Current Load"} 0.560'
         ]
         # Setup fake get_services response.
         json_response = json.dumps(self.services)

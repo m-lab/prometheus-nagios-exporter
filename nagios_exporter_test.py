@@ -8,6 +8,8 @@ import os
 import socket
 import textwrap
 import unittest
+import sys
+from collections import OrderedDict
 
 import nagios_exporter
 
@@ -16,6 +18,9 @@ class FakeSocketIO(object):
     """An in-memory, socket-like object for unit tests."""
 
     def __init__(self, initial_value=''):
+        if sys.version_info[0] >= 3:
+            initial_value = initial_value.encode()
+
         self._writer = io.BytesIO()
         self._reader = io.BytesIO(initial_value)
 
@@ -57,6 +62,14 @@ class NagiosExporterTest(unittest.TestCase):
                 is_flapping=0
             ))
         ]
+
+    def assertItemsEqual(self, *args, **kwargs):
+        # In Python 3, assertItemsEqual is named assertCountEqual
+        # https://hg.python.org/cpython/rev/d9921cb6e3cd
+        if sys.version_info[0] >= 3:
+            return super(NagiosExporterTest, self).assertCountEqual(*args, **kwargs)
+        else:
+            return super(NagiosExporterTest, self).assertItemsEqual(*args, **kwargs)
 
     def test_canonical_command_with_nrpe(self):
         actual = nagios_exporter.canonical_command('check_nrpe2!check_node')
@@ -176,8 +189,8 @@ class NagiosExporterTest(unittest.TestCase):
           nagios_exporter.format_metric('check_cmd', {'key': '/'}, '0.1'))
       # String.
       self.assertEqual(
-          'nagios_check_cmd{value="v0.1", key="/"} 1',
-          nagios_exporter.format_metric('check_cmd', {'key': '/'}, 'v0.1'))
+          'nagios_check_cmd{key="/", value="v0.1"} 1',
+          nagios_exporter.format_metric('check_cmd', OrderedDict({'key': '/'}), 'v0.1'))
 
     @mock.patch.object(nagios_exporter, 'collect_metrics')
     def test_metrics_when_exception_is_raised(self, mock_metrics):
@@ -186,14 +199,14 @@ class NagiosExporterTest(unittest.TestCase):
         actual = nagios_exporter.metrics(())
 
         self.assertEqual(actual.status, '200 OK')
-        self.assertEqual(actual.get_data(), 'nagios_exporter_success 0\n')
+        self.assertEqual(actual.get_data(as_text=True), 'nagios_exporter_success 0\n')
 
     @mock.patch.object(nagios_exporter, 'collect_metrics')
     def test_metrics(self, mock_metrics):
         actual = nagios_exporter.metrics(())
 
         self.assertEqual(actual.status, '200 OK')
-        self.assertEqual(actual.get_data(), 'nagios_exporter_success 1\n')
+        self.assertEqual(actual.get_data(as_text=True), 'nagios_exporter_success 1\n')
 
     @mock.patch.object(nagios_exporter, 'connect')
     @mock.patch.object(os.path, 'exists')
@@ -216,7 +229,7 @@ class NagiosExporterTest(unittest.TestCase):
             'nagios_check_load_state{hostname="localhost", service="Current Load"} 0',
             'nagios_check_load_flapping{hostname="localhost", service="Current Load"} 0',
             'nagios_check_load_acknowledged{hostname="localhost", service="Current Load"} 0',
-            'nagios_check_load_perf_data_value{hostname="localhost", service="Current Load", key="load1"} 0.560'
+            'nagios_check_load_perf_data_value{hostname="localhost", key="load1", service="Current Load"} 0.560'
         ]
         # Setup fake get_services response.
         json_response = json.dumps(self.services)

@@ -397,7 +397,7 @@ def format_metric(name, labels, value):
         labels['value'] = value
         value = 1
     return 'nagios_%s%s %s' % (
-        name.replace('-', '_'), format_labels(labels), value)
+        name.replace('-', '_').replace('.','_'), format_labels(labels), value)
 
 
 def get_status(session):

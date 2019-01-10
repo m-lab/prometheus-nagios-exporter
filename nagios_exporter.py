@@ -98,6 +98,10 @@ def parse_args(args):
         '--path', default='/var/lib/nagios3/rw/livestatus',
         help='Absolute path to livestatus Nagios UNIX socket.')
 
+    parser.add_argument(
+        '--host', default='0.0.0.0', metavar='0.0.0.0',
+        help='The hostname for the export server to listen on.')
+
     # Port reserved on:
     # https://github.com/prometheus/prometheus/wiki/Default-port-allocations
     parser.add_argument(
@@ -496,7 +500,7 @@ def main():  # pragma: no cover
 
     app = flask.Flask(__name__)
     app.add_url_rule('/metrics', 'metrics', lambda: metrics(args))
-    app.run(host='0.0.0.0', port=args.port, debug=False)
+    app.run(host=args.host, port=args.port, debug=False)
 
 
 if __name__ == '__main__':  # pragma: no cover

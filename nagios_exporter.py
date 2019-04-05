@@ -469,8 +469,11 @@ def collect_metrics(args, lines):
 
         if args.whitelist:
             for metric in services:
-                if any(whitelist in metric for whitelist in args.whitelist):
-                    lines.append(metric)
+                for whitelist in args.whitelist:
+                    metric_match = re.search(whitelist, metric)
+                    if metric_match:
+                        lines.append(metric)
+
         else:
             lines.extend(services)
 
